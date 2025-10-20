@@ -1,0 +1,2428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RetroChat - IRC Style</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#00ff00">
+  <meta name="background-color" content="#000000">
+  <meta name="display" content="standalone">
+  <meta name="orientation" content="portrait-primary">
+  
+  <!-- Apple PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RetroChat">
+  
+  <!-- Microsoft PWA Meta Tags -->
+  <meta name="msapplication-TileColor" content="#000000">
+  <meta name="msapplication-tap-highlight" content="no">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Share Tech Mono', monospace;
+      background: #000;
+      color: #00ff00;
+      min-height: 100vh;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /*noinspection CssInvalidPropertyValue*/
+    @supports (-webkit-touch-callout: none) {
+      body {
+        min-height: -webkit-fill-available;
+      }
+    }
+
+    .header {
+      background: #001100;
+      border-bottom: 2px solid #00ff00;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+
+    .title {
+      font-size: 18px;
+      color: #00ff00;
+      text-shadow: 0 0 10px #00ff00;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .nickname-input {
+      background: #000;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 5px 10px;
+      font-family: inherit;
+      font-size: 14px;
+    }
+
+    .nickname-input:focus {
+      outline: none;
+      box-shadow: 0 0 5px #00ff00;
+    }
+
+    .notification-button {
+      background: #003300;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 5px 8px;
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-radius: 3px;
+    }
+
+    .notification-button:hover {
+      background: #00ff00;
+      color: #000;
+      box-shadow: 0 0 5px #00ff00;
+    }
+
+    .notification-button.enabled {
+      background: #00ff00;
+      color: #000;
+    }
+
+    .notification-button.disabled {
+      background: #660000;
+      border-color: #ff0000;
+      color: #ff6666;
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .hide-windows-button {
+      background: #003300;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 5px 8px;
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-radius: 3px;
+      margin-left: 5px;
+    }
+
+    .hide-windows-button:hover {
+      background: #00ff00;
+      color: #000;
+      box-shadow: 0 0 5px #00ff00;
+    }
+
+    .hide-windows-button.hidden {
+      background: #330000;
+      border-color: #ff6600;
+      color: #ff9900;
+    }
+
+    .system-window.hidden,
+    .missing-messages-window.hidden {
+      display: none !important;
+    }
+
+    .status-group {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    .status {
+      color: #ffff00;
+      font-size: 12px;
+      cursor: help;
+      position: relative;
+    }
+
+    .status .tooltip {
+      visibility: hidden;
+      opacity: 0;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 5px;
+      background: #001100;
+      color: #00ff00;
+      padding: 8px 12px;
+      border: 1px solid #00ff00;
+      border-radius: 4px;
+      font-size: 10px;
+      white-space: nowrap;
+      min-width: 150px;
+      z-index: 1000;
+      transition: opacity 0.3s, visibility 0.3s;
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+    }
+
+    .status:hover .tooltip {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .tooltip-protocol {
+      display: block;
+      font-family: 'Share Tech Mono', monospace;
+      color: #00ffff;
+      margin-bottom: 2px;
+      line-height: 1.2;
+    }
+
+    .tooltip-protocol:last-child {
+      margin-bottom: 0;
+    }
+
+
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 20px;
+      padding-bottom: 80px;
+      background: #000;
+      min-height: 0;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    @media (max-width: 768px) {
+      .reply-indicator {
+        bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+        padding: 6px 15px;
+        margin: 0 10px;
+        border-radius: 4px;
+        left: 0;
+        right: 0;
+      }
+
+      .reply-indicator-content {
+        font-size: 11px;
+        line-height: 1.3;
+        overflow: hidden;
+      }
+
+      .reply-indicator-text {
+        max-width: 180px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: inline-block;
+        vertical-align: bottom;
+      }
+
+      .cancel-reply {
+        font-size: 11px;
+        padding: 4px 8px;
+        min-height: 28px;
+        min-width: 28px;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+
+      .cancel-reply:active {
+        transform: scale(0.95);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .reply-indicator {
+        margin: 0 5px;
+        padding: 5px 12px;
+      }
+
+      .reply-indicator-content {
+        font-size: 10px;
+      }
+
+      .reply-indicator-text {
+        max-width: 120px;
+      }
+
+      .cancel-reply {
+        font-size: 10px;
+        padding: 3px 6px;
+        min-height: 24px;
+        min-width: 24px;
+      }
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      .header {
+        padding: 6px 15px;
+        min-height: auto;
+      }
+
+      .title {
+        font-size: 12px;
+        flex: 1;
+        text-align: left;
+      }
+
+      .user-info {
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .nickname-input {
+        width: 80px;
+        padding: 3px 6px;
+        font-size: 11px;
+      }
+
+      .notification-button {
+        padding: 3px 6px;
+        font-size: 12px;
+      }
+
+      .hide-windows-button {
+        padding: 3px 6px;
+        font-size: 12px;
+        margin-left: 3px;
+      }
+
+      .status-group {
+        align-items: flex-end;
+        gap: 1px;
+      }
+
+      .status {
+        font-size: 9px;
+      }
+
+      .status .tooltip {
+        right: 0;
+        left: auto;
+        max-width: calc(100vw - 40px);
+        font-size: 9px;
+      }
+
+
+      .chat-container {
+        padding: 8px 15px;
+        padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .input-container {
+        padding: 10px 15px;
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .message-input {
+        font-size: 16px; /* Prevents zoom on iOS */
+        padding: 12px 15px;
+      }
+
+      .send-button {
+        padding: 12px 15px;
+        font-size: 14px;
+      }
+
+      .message {
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+
+      .message-status {
+        font-size: 11px;
+        min-width: 14px;
+        height: 14px;
+        margin-left: 4px;
+      }
+    }
+
+    /* Very small screens */
+    @media (max-width: 480px) {
+      .input-container {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .send-button {
+        width: 100%;
+      }
+
+    }
+
+    .message {
+      margin-bottom: 5px;
+      line-height: 1.4;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 3px;
+      position: relative;
+    }
+
+    .message-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-right: 50px; /* Leave space for reply button */
+    }
+
+    .reply-button {
+      display: none;
+      position: absolute;
+      right: 10px;
+      bottom: 8px;
+      color: #00ff00;
+      opacity: 0.6;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 4px;
+      border: 1px solid transparent;
+      background: rgba(0, 17, 0, 0.8);
+      transition: opacity 0.2s, border-color 0.2s;
+      border-radius: 3px;
+    }
+
+    .message:hover .reply-button {
+      display: block;
+    }
+
+    .reply-button:hover {
+      opacity: 1;
+      border-color: #00ff00;
+      box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      .reply-button {
+        display: block;
+        opacity: 0.6;
+        font-size: 10px;
+        right: 15px;
+        padding: 4px 6px;
+        min-height: 24px;
+        min-width: 40px;
+        background: rgba(0, 17, 0, 0.9);
+        border-radius: 3px;
+      }
+
+      .reply-button:active {
+        opacity: 1;
+        background: rgba(0, 255, 0, 0.2);
+        transform: scale(0.95);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .reply-button {
+        font-size: 9px;
+        right: 10px;
+        padding: 3px 5px;
+        min-height: 22px;
+        min-width: 35px;
+      }
+    }
+
+    .reply-preview {
+      border-left: 2px solid #00ff00;
+      padding-left: 10px;
+      margin-bottom: 5px;
+      opacity: 0.7;
+      font-size: 12px;
+      cursor: pointer;
+      transition: opacity 0.2s, background 0.2s;
+    }
+
+    .reply-preview:hover {
+      opacity: 0.9;
+      background: rgba(0, 255, 0, 0.05);
+    }
+
+    .reply-preview .reply-nick {
+      color: #00ffff;
+      font-weight: bold;
+    }
+
+    .reply-preview .reply-text {
+      color: #88ff88;
+      max-width: 300px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-block;
+      vertical-align: bottom;
+    }
+
+    /* Mobile reply preview improvements */
+    @media (max-width: 768px) {
+      .reply-preview {
+        margin-bottom: 5px;
+        padding-left: 8px;
+        display: block;
+        width: 100%;
+      }
+
+      .reply-preview .reply-text {
+        max-width: calc(100vw - 100px);
+        font-size: 11px;
+        display: block;
+        margin-top: 2px;
+      }
+
+      .reply-preview .reply-nick {
+        font-size: 11px;
+        display: inline-block;
+      }
+
+      /* Mobile-specific adjustments */
+      .message-content {
+        padding-right: 45px; /* Slightly less space needed on mobile */
+      }
+    }
+
+    @media (max-width: 480px) {
+      .reply-preview .reply-text {
+        max-width: calc(100vw - 80px);
+        font-size: 10px;
+      }
+
+      .reply-preview .reply-nick {
+        font-size: 10px;
+      }
+
+      .message-content {
+        padding-right: 35px; /* Less space needed on very small screens */
+      }
+    }
+
+    .message.highlight {
+      animation: messageHighlight 2s ease-out;
+    }
+
+    @keyframes messageHighlight {
+      0% {
+        background: rgba(0, 255, 0, 0.3);
+        transform: scale(1.02);
+      }
+      50% {
+        background: rgba(0, 255, 0, 0.2);
+        transform: scale(1.01);
+      }
+      100% {
+        background: transparent;
+        transform: scale(1);
+      }
+    }
+
+    .reply-preview.not-found {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .reply-preview.not-found:hover {
+      background: rgba(255, 0, 0, 0.05);
+    }
+
+    .reply-indicator {
+      position: fixed;
+      bottom: 80px;
+      left: 0;
+      right: 0;
+      background: #001100;
+      border-top: 1px solid #00ff00;
+      border-bottom: 1px solid #00ff00;
+      padding: 8px 20px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 999;
+      animation: slideUp 0.2s ease-out;
+    }
+
+    .reply-indicator.active {
+      display: flex;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .reply-indicator-content {
+      flex: 1;
+      color: #00ff00;
+      font-size: 12px;
+    }
+
+    .reply-indicator-nick {
+      color: #00ffff;
+      font-weight: bold;
+    }
+
+    .reply-indicator-text {
+      color: #88ff88;
+      opacity: 0.8;
+    }
+
+    .cancel-reply {
+      background: none;
+      border: 1px solid #ff0000;
+      color: #ff0000;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .cancel-reply:hover {
+      background: #ff0000;
+      color: #000;
+      box-shadow: 0 0 5px #ff0000;
+    }
+
+    .message-status {
+      font-size: 12px;
+      min-width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 5px;
+      vertical-align: middle;
+    }
+
+    .message-status.sending {
+      color: #ffff00;
+      animation: spin 1s linear infinite;
+    }
+
+    .message-status.sent {
+      color: #00ff00;
+    }
+
+    .message-status.acknowledged {
+      color: #00ff00;
+    }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .timestamp {
+      color: #666;
+    }
+
+    .sender {
+      font-weight: bold;
+    }
+
+    .message-text {
+      color: #00ff00;
+    }
+
+    .system-message {
+      color: #ffff00;
+      font-style: italic;
+    }
+
+    .connection-message {
+      color: #666600;
+      font-style: italic;
+      opacity: 0.6;
+    }
+
+    .local-message {
+      background: rgba(0, 255, 0, 0.05);
+      border-left: 3px solid #00ff00;
+      padding-left: 10px;
+      margin-left: 20px;
+    }
+
+    .local-message .sender {
+      text-shadow: 0 0 2px currentColor;
+    }
+
+    .local-message .message-text {
+      color: #ccffcc;
+    }
+
+    .input-container {
+      background: #001100;
+      border-top: 2px solid #00ff00;
+      padding: 15px 20px;
+      display: flex;
+      gap: 10px;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+
+    .message-input {
+      flex: 1;
+      background: #000;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 10px 15px;
+      font-family: inherit;
+      font-size: 14px;
+    }
+
+    .message-input:focus {
+      outline: none;
+      box-shadow: 0 0 10px #00ff00;
+    }
+
+    .send-button {
+      background: #003300;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 10px 20px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .send-button:hover {
+      background: #00ff00;
+      color: #000;
+      box-shadow: 0 0 10px #00ff00;
+    }
+
+    .send-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .connecting {
+      color: #ffff00;
+    }
+
+    .connected {
+      color: #00ff00;
+    }
+
+    .error {
+      color: #ff0000;
+    }
+
+    /* Scrollbar styling */
+    .chat-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .chat-container::-webkit-scrollbar-track {
+      background: #001100;
+    }
+
+    .chat-container::-webkit-scrollbar-thumb {
+      background: #00ff00;
+      border-radius: 4px;
+    }
+
+    .chat-container::-webkit-scrollbar-thumb:hover {
+      background: #00cc00;
+    }
+
+    /* System Window Styles */
+    .system-window, .missing-messages-window {
+      position: fixed;
+      top: 70px;
+      right: 20px;
+      width: 300px;
+      max-height: 250px;
+      background: rgba(0, 17, 0, 0.95);
+      border: 1px solid #00ff00;
+      border-radius: 4px;
+      z-index: 1001;
+      font-size: 11px;
+      box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+      backdrop-filter: blur(5px);
+    }
+
+    .missing-messages-window {
+      top: 330px;
+      right: 20px;
+      border-color: #ff6600;
+      box-shadow: 0 0 15px rgba(255, 102, 0, 0.3);
+    }
+
+    .system-window-header, .missing-messages-window-header {
+      background: #001100;
+      border-bottom: 1px solid #00ff00;
+      padding: 4px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: move;
+      user-select: none;
+    }
+
+    .missing-messages-window-header {
+      border-bottom-color: #ff6600;
+    }
+
+    .system-window-title, .missing-messages-window-title {
+      color: #00ff00;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .missing-messages-window-title {
+      color: #ff6600;
+    }
+
+    .system-window-toggle, .missing-messages-window-toggle {
+      background: none;
+      border: none;
+      color: #00ff00;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 0;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+    }
+
+    .system-window-toggle:hover, .missing-messages-window-toggle:hover {
+      background: rgba(0, 255, 0, 0.1);
+    }
+
+    .system-window-content, .missing-messages-window-content {
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 6px;
+    }
+
+    .system-window-content::-webkit-scrollbar, .missing-messages-window-content::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .system-window-content::-webkit-scrollbar-track, .missing-messages-window-content::-webkit-scrollbar-track {
+      background: #001100;
+    }
+
+    .system-window-content::-webkit-scrollbar-thumb, .missing-messages-window-content::-webkit-scrollbar-thumb {
+      background: #00ff00;
+      border-radius: 2px;
+    }
+
+    .missing-messages-window-content::-webkit-scrollbar-thumb {
+      background: #ff6600;
+    }
+
+    .system-window-message {
+      color: #ffff00;
+      margin-bottom: 2px;
+      line-height: 1.3;
+      font-size: 10px;
+    }
+
+    .system-window-message.connection {
+      color: #666600;
+      opacity: 0.8;
+    }
+
+    .missing-messages-window-message {
+      color: #ff6600;
+      margin-bottom: 2px;
+      line-height: 1.2;
+      font-size: 9px;
+      font-family: 'Share Tech Mono', monospace;
+      padding: 1px 0;
+      border-bottom: 1px solid rgba(255, 102, 0, 0.15);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .missing-messages-window-message:last-child {
+      border-bottom: none;
+    }
+
+    .missing-messages-window-message .message-id {
+      color: #ffaa00;
+      font-weight: bold;
+    }
+
+    .missing-messages-window-message .retrieval-hint {
+      color: #ff8800;
+      opacity: 0.9;
+    }
+
+    .missing-messages-window-message.received {
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+
+    .missing-messages-window-message.received .message-id {
+      color: #885500;
+    }
+
+    .missing-messages-window-message.received .retrieval-hint {
+      color: #884400;
+    }
+
+    .system-window.minimized .system-window-content,
+    .missing-messages-window.minimized .missing-messages-window-content {
+      display: none;
+    }
+
+    /* Mobile adjustments for system window */
+    @media (max-width: 768px) {
+      .system-window, .missing-messages-window {
+        top: 50px;
+        right: 10px;
+        width: 250px;
+        max-height: 150px;
+      }
+
+      .missing-messages-window {
+        top: 210px;
+        right: 10px;
+      }
+
+      .system-window-content, .missing-messages-window-content {
+        max-height: 120px;
+        padding: 4px;
+      }
+
+      .system-window-message, .missing-messages-window-message {
+        font-size: 9px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .system-window, .missing-messages-window {
+        width: calc(100vw - 40px);
+        right: 10px;
+      }
+
+      .system-window {
+        top: 50px;
+      }
+
+      .missing-messages-window {
+        top: 210px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="title">RetroChat</div>
+  <div class="user-info">
+    <input type="text" class="nickname-input" placeholder="Enter nickname..." value="">
+    <button class="notification-button" id="notificationButton" title="Enable notifications">🔔</button>
+    <button class="hide-windows-button" id="hideWindowsButton" title="Hide/show system windows">SYS</button>
+    <div class="status-group">
+      <span class="status connecting" id="status">
+        Connecting...
+        <div class="tooltip" id="statusTooltip">Checking connections...</div>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div class="system-window" id="systemWindow">
+  <div class="system-window-header">
+    <span class="system-window-title">SYSTEM</span>
+    <button class="system-window-toggle" id="systemToggle">−</button>
+  </div>
+  <div class="system-window-content" id="systemContent">
+    <div class="system-window-message">Welcome to RetroChat! Connecting to Waku network...</div>
+  </div>
+</div>
+
+<div class="missing-messages-window" id="missingMessagesWindow">
+  <div class="missing-messages-window-header">
+    <span class="missing-messages-window-title">MISSING MESSAGES</span>
+    <button class="missing-messages-window-toggle" id="missingMessagesToggle">−</button>
+  </div>
+  <div class="missing-messages-window-content" id="missingMessagesContent">
+    <div class="missing-messages-window-message">No missing messages detected</div>
+  </div>
+</div>
+
+<div class="chat-container" id="chatContainer">
+</div>
+
+<div class="reply-indicator" id="replyIndicator">
+  <div class="reply-indicator-content">
+    Replying to <span class="reply-indicator-nick" id="replyNick"></span>:
+    <span class="reply-indicator-text" id="replyText"></span>
+  </div>
+  <button class="cancel-reply" id="cancelReply">✕</button>
+</div>
+
+<div class="input-container">
+  <input type="text" class="message-input" id="messageInput" placeholder="Type your message..." disabled>
+  <button class="send-button" id="sendButton" disabled>SEND</button>
+</div>
+
+<script type="module">
+  import protobuf from 'protobufjs';
+  import {
+    createLightNode,
+    ReliableChannel,
+    HealthStatus,
+  } from '@waku/sdk';
+
+  // Make protobuf available globally for the existing code
+  window.protobuf = protobuf;
+
+  // Define protobuf schema
+  const protoSchema = `
+            syntax = "proto3";
+            message Chat2Message {
+                uint64 timestamp = 1;
+                string nick = 2;
+                bytes payload = 3;
+                string replyToMessageId = 4;  // Message ID being replied to
+                string replyToNick = 5;        // Nick of original message author
+                string replyToText = 6;        // Preview of original message text
+            }
+        `;
+
+  class RetroIRC {
+    constructor() {
+      this.node = null;
+      this.contentTopic = '/toy-chat/2/huilong/proto';
+      this.nickname = this.loadNickname();
+      this.Chat2Message = null;
+      this.hasShownConnectedMessage = false; // Track if we've shown the initial connection message
+      this.seenMessages = new Set();
+      this.localSentMessages = new Map(); // Track messages we sent locally with their chat message IDs
+      this.missingMessagesCount = 0;
+      this.recoveredMessagesCount = 0; // Track recovered messages
+      this.seenMissingMessages = new Set(); // Track unique missing messages
+      this.missingMessagesByHint = new Map(); // Map retrieval hint to message element for crossing out
+      this.nicknameColors = new Map(); // Map nickname to color
+      this.messagesByMessageId = new Map(); // Store messages by their ID for replies
+      this.replyingTo = null; // Current reply context
+      this.notificationsEnabled = false; // Track if notifications are enabled
+
+      this.initProtobuf();
+      this.initElements();
+      this.initEventListeners();
+      this.initNotificationButton();
+      this.initWaku();
+    }
+
+    loadNickname() {
+      try {
+        const stored = localStorage.getItem('retro-chat-nickname');
+        return stored || this.generateRandomNickname();
+      } catch (error) {
+        console.warn('Could not load nickname from localStorage:', error);
+        return this.generateRandomNickname();
+      }
+    }
+
+    saveNickname(nickname) {
+      try {
+        localStorage.setItem('retro-chat-nickname', nickname);
+      } catch (error) {
+        console.warn('Could not save nickname to localStorage:', error);
+      }
+    }
+
+    loadWindowsVisibility() {
+      try {
+        const isHidden = localStorage.getItem('retro-chat-windows-hidden') === 'true';
+        if (isHidden) {
+          this.systemWindow.classList.add('hidden');
+          this.missingMessagesWindow.classList.add('hidden');
+          this.hideWindowsButton.classList.add('hidden');
+          this.hideWindowsButton.textContent = '---';
+          this.hideWindowsButton.title = 'Show system windows';
+        } else {
+          this.hideWindowsButton.textContent = 'SYS';
+          this.hideWindowsButton.title = 'Hide system windows';
+        }
+      } catch (error) {
+        console.warn('Could not load windows visibility from localStorage:', error);
+      }
+    }
+
+    toggleWindowsVisibility() {
+      try {
+        const isHidden = this.systemWindow.classList.contains('hidden');
+        if (isHidden) {
+          // Show windows
+          this.systemWindow.classList.remove('hidden');
+          this.missingMessagesWindow.classList.remove('hidden');
+          this.hideWindowsButton.classList.remove('hidden');
+          this.hideWindowsButton.textContent = 'SYS';
+          this.hideWindowsButton.title = 'Hide system windows';
+          localStorage.setItem('retro-chat-windows-hidden', 'false');
+        } else {
+          // Hide windows
+          this.systemWindow.classList.add('hidden');
+          this.missingMessagesWindow.classList.add('hidden');
+          this.hideWindowsButton.classList.add('hidden');
+          this.hideWindowsButton.textContent = '---';
+          this.hideWindowsButton.title = 'Show system windows';
+          localStorage.setItem('retro-chat-windows-hidden', 'true');
+        }
+      } catch (error) {
+        console.warn('Could not toggle windows visibility:', error);
+      }
+    }
+
+    generateRandomNickname() {
+      const adjectives = [
+        'Cyber', 'Neon', 'Retro', 'Pixel', 'Code', 'Data', 'Hack', 'Tech',
+        'Digital', 'Binary', 'Matrix', 'Quantum', 'Neural', 'Crypto', 'Synth'
+      ];
+
+      const nouns = [
+        'Hacker', 'Terminal', 'Gamer', 'Wizard', 'Ninja', 'Ghost', 'Runner',
+        'Rider', 'Walker', 'Coder', 'Byte', 'Node', 'Core', 'Link', 'Net'
+      ];
+
+      const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+      const noun = nouns[Math.floor(Math.random() * nouns.length)];
+      const number = Math.floor(Math.random() * 100);
+
+      const nickname = `${adjective}${noun}${number}`;
+      this.saveNickname(nickname);
+      return nickname;
+    }
+
+    initNotificationButton() {
+      if (!('Notification' in window)) {
+        console.log('This browser does not support notifications');
+        this.notificationButton.style.display = 'none';
+        this.addSystemMessage('Browser notifications not supported');
+        return;
+      }
+
+      // Set initial button state
+      this.updateNotificationButtonState();
+
+      // Add click handler for notification button
+      this.notificationButton.addEventListener('click', () => {
+        this.requestNotificationPermission();
+      });
+
+      // Add click handler for hide windows button
+      this.hideWindowsButton.addEventListener('click', () => {
+        this.toggleWindowsVisibility();
+      });
+
+      // Check if we're in a PWA context
+      const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                    window.navigator.standalone === true;
+      
+      if (isPWA) {
+        this.addSystemMessage('Running in PWA mode - notifications should work better');
+      } else {
+        this.addSystemMessage('For best notification support on mobile, add this app to your home screen');
+      }
+    }
+
+    updateNotificationButtonState() {
+      const permission = Notification.permission;
+      
+      if (permission === 'granted') {
+        this.notificationButton.className = 'notification-button enabled';
+        this.notificationButton.title = 'Notifications enabled';
+        this.notificationButton.textContent = '🔔';
+        this.notificationsEnabled = true;
+      } else if (permission === 'denied') {
+        this.notificationButton.className = 'notification-button disabled';
+        this.notificationButton.title = 'Notifications blocked - enable in browser settings';
+        this.notificationButton.textContent = '🔕';
+        this.notificationsEnabled = false;
+      } else if (permission === 'default') {
+        this.notificationButton.className = 'notification-button';
+        this.notificationButton.title = 'Click to request notification permission';
+        this.notificationButton.textContent = '🔔';
+        this.notificationsEnabled = false;
+      } else {
+        this.notificationButton.className = 'notification-button';
+        this.notificationButton.title = `Unknown permission state: ${permission}`;
+        this.notificationButton.textContent = '🔔';
+        this.notificationsEnabled = false;
+      }
+      
+      // Log state for debugging
+      console.log('Button state updated:', permission, this.notificationsEnabled);
+    }
+
+    async requestNotificationPermission() {
+      if (!('Notification' in window)) {
+        this.addSystemMessage('Browser notifications not supported');
+        return;
+      }
+
+      // Log current permission state for debugging
+      console.log('Current notification permission:', Notification.permission);
+      this.addSystemMessage(`Current permission state: ${Notification.permission}`);
+
+      // If already granted, just update state
+      if (Notification.permission === 'granted') {
+        this.notificationsEnabled = true;
+        this.updateNotificationButtonState();
+        this.addSystemMessage('Notifications are already enabled');
+        return;
+      }
+
+      // If denied, show instruction message
+      if (Notification.permission === 'denied') {
+        this.addSystemMessage('Notifications are blocked. Please enable them in your browser settings and reload the page.');
+        return;
+      }
+
+      // For 'default' state (ask to allow), request permission
+      if (Notification.permission === 'default') {
+        this.addSystemMessage('Requesting notification permission...');
+        
+        // Request permission (this must be user-initiated)
+        try {
+          let permission;
+          
+          // Try different methods for different browsers
+          if (Notification.requestPermission.length === 0) {
+            // Modern Promise-based API
+            permission = await Notification.requestPermission();
+          } else {
+            // Older callback-based API (fallback for some mobile browsers)
+            permission = await new Promise((resolve) => {
+              Notification.requestPermission(resolve);
+            });
+          }
+          
+          console.log('Permission result:', permission);
+          this.addSystemMessage(`Permission result: ${permission}`);
+          
+          if (permission === 'granted') {
+            this.notificationsEnabled = true;
+            this.addSystemMessage('Notifications enabled successfully!');
+            
+            // Test notification
+            setTimeout(() => {
+              this.createNotification('System', 'Notifications are now working!', false);
+            }, 1000);
+          } else if (permission === 'denied') {
+            this.addSystemMessage('Notification permission denied by user');
+          } else {
+            this.addSystemMessage('Notification permission not granted (unknown state)');
+          }
+          
+          this.updateNotificationButtonState();
+          
+        } catch (error) {
+          console.error('Error requesting notification permission:', error);
+          this.addSystemMessage(`Permission request failed: ${error.message}`);
+          
+          // For mobile browsers that don't support requestPermission()
+          if (error.name === 'NotAllowedError') {
+            this.addSystemMessage('NotAllowedError - Permission blocked by browser policy');
+          } else if (error.message.includes('user gesture')) {
+            this.addSystemMessage('User gesture required - try clicking the button again');
+          } else {
+            this.addSystemMessage('This may be due to browser restrictions on mobile - try adding to home screen');
+          }
+        }
+      } else {
+        this.addSystemMessage(`Unexpected permission state: ${Notification.permission}`);
+      }
+    }
+
+    createNotification(sender, text, isReply = false) {
+      if (!this.notificationsEnabled || sender === this.nickname) {
+        return; // Don't show notifications for our own messages
+      }
+
+      // Double-check permission before creating notification
+      if (Notification.permission !== 'granted') {
+        console.log('Notification permission not granted, skipping notification');
+        return;
+      }
+
+      try {
+        const title = isReply ? `${sender} replied in RetroChat` : `${sender} in RetroChat`;
+        const body = text.length > 100 ? text.substring(0, 100) + '...' : text;
+        
+        // Enhanced notification options for better mobile support
+        const options = {
+          body: body,
+          tag: 'retro-chat-message',
+          icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5NiIgaGVpZ2h0PSI5NiIgdmlld0JveD0iMCAwIDk2IDk2Ij4KICA8cmVjdCB3aWR0aD0iOTYiIGhlaWdodD0iOTYiIGZpbGw9IiMwMDAiLz4KICA8dGV4dCB4PSI0OCIgeT0iNTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMwMGZmMDAiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMzIiIGZvbnQtd2VpZ2h0PSJib2xkIj5SQzwvdGV4dD4KPC9zdmc+',
+          badge: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiMwMGZmMDAiLz4KICA8dGV4dCB4PSIzNiIgeT0iNDUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiMwMDAiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMjQiIGZvbnQtd2VpZ2h0PSJib2xkIj5SQzwvdGV4dD4KPC9zdmc+',
+          requireInteraction: false,
+          silent: false,
+          timestamp: Date.now(),
+          data: {
+            sender: sender,
+            text: text,
+            isReply: isReply,
+            timestamp: Date.now()
+          }
+        };
+
+        const notification = new Notification(title, options);
+
+        // Auto-close notification after 8 seconds (longer for mobile)
+        setTimeout(() => {
+          try {
+            notification.close();
+          } catch (e) {
+            // Ignore if already closed
+          }
+        }, 8000);
+
+        // Focus window when notification is clicked
+        notification.onclick = () => {
+          try {
+            window.focus();
+            notification.close();
+            
+            // Try to bring the window to foreground on mobile
+            if (document.visibilityState === 'hidden') {
+              // App was backgrounded, try to focus
+              document.addEventListener('visibilitychange', function focusOnceVisible() {
+                if (document.visibilityState === 'visible') {
+                  window.focus();
+                  document.removeEventListener('visibilitychange', focusOnceVisible);
+                }
+              }, { once: true });
+            }
+          } catch (e) {
+            console.log('Error handling notification click:', e);
+          }
+        };
+
+        // Handle notification error
+        notification.onerror = (error) => {
+          console.error('Notification error:', error);
+          this.addSystemMessage('Notification failed to display');
+        };
+
+        console.log('Notification created successfully');
+
+      } catch (error) {
+        console.error('Error creating notification:', error);
+        console.error('Error details:', error.message);
+        
+        // Provide specific error feedback
+        if (error.name === 'NotAllowedError') {
+          this.addSystemMessage('Notifications blocked by browser');
+        } else if (error.message.includes('ServiceWorker')) {
+          this.addSystemMessage('Notification failed: Service Worker issue');
+        } else {
+          this.addSystemMessage('Notification failed: ' + error.message);
+        }
+      }
+    }
+
+    initProtobuf() {
+      const root = window.protobuf.parse(protoSchema).root;
+      this.Chat2Message = root.lookupType('Chat2Message');
+    }
+
+    initElements() {
+      this.chatContainer = document.getElementById('chatContainer');
+      this.messageInput = document.getElementById('messageInput');
+      this.sendButton = document.getElementById('sendButton');
+      this.nicknameInput = document.querySelector('.nickname-input');
+      this.status = document.getElementById('status');
+      this.statusTooltip = document.getElementById('statusTooltip');
+      this.systemWindow = document.getElementById('systemWindow');
+      this.systemContent = document.getElementById('systemContent');
+      this.systemToggle = document.getElementById('systemToggle');
+      this.systemWindowHeader = this.systemWindow.querySelector('.system-window-header');
+
+      // Missing messages window elements
+      this.missingMessagesWindow = document.getElementById('missingMessagesWindow');
+      this.missingMessagesContent = document.getElementById('missingMessagesContent');
+      this.missingMessagesToggle = document.getElementById('missingMessagesToggle');
+      this.missingMessagesHeader = this.missingMessagesWindow.querySelector('.missing-messages-window-header');
+
+      // Reply indicator elements
+      this.replyIndicator = document.getElementById('replyIndicator');
+      this.replyNick = document.getElementById('replyNick');
+      this.replyText = document.getElementById('replyText');
+      this.cancelReplyButton = document.getElementById('cancelReply');
+
+      // Notification button element
+      this.notificationButton = document.getElementById('notificationButton');
+
+      // Hide windows button element
+      this.hideWindowsButton = document.getElementById('hideWindowsButton');
+
+      // Load and apply windows visibility state
+      this.loadWindowsVisibility();
+
+      // Set the generated nickname in the input field
+      this.nicknameInput.value = this.nickname;
+    }
+
+    initEventListeners() {
+      this.sendButton.addEventListener('click', () => this.sendMessage());
+
+      // Handle Enter key for sending messages
+      this.messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          this.sendMessage();
+        }
+      });
+
+      this.nicknameInput.addEventListener('change', (e) => {
+        this.nickname = e.target.value.trim() || this.generateRandomNickname();
+        this.saveNickname(this.nickname);
+        this.addSystemMessage(`Nickname changed to: ${this.nickname}`);
+      });
+
+      // Also handle Enter for nickname input
+      this.nicknameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.nickname = e.target.value.trim() || this.generateRandomNickname();
+          this.saveNickname(this.nickname);
+          this.addSystemMessage(`Nickname changed to: ${this.nickname}`);
+          this.messageInput.focus(); // Focus back to message input
+        }
+      });
+
+      // System window toggle
+      this.systemToggle.addEventListener('click', () => {
+        this.systemWindow.classList.toggle('minimized');
+        this.systemToggle.textContent = this.systemWindow.classList.contains('minimized') ? '+' : '−';
+      });
+
+      // Missing messages window toggle
+      this.missingMessagesToggle.addEventListener('click', () => {
+        this.missingMessagesWindow.classList.toggle('minimized');
+        this.missingMessagesToggle.textContent = this.missingMessagesWindow.classList.contains('minimized') ? '+' : '−';
+      });
+
+      // Reply functionality
+      this.cancelReplyButton.addEventListener('click', () => this.cancelReply());
+
+      // Escape key to cancel reply
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.replyingTo) {
+          this.cancelReply();
+        }
+      });
+
+      // System window drag functionality
+      this.initSystemWindowDrag();
+      // Missing messages window drag functionality
+      this.initMissingMessagesWindowDrag();
+    }
+
+    initSystemWindowDrag() {
+      let isDragging = false;
+      let currentX;
+      let currentY;
+      let initialX;
+      let initialY;
+      let xOffset = 0;
+      let yOffset = 0;
+
+      this.systemWindowHeader.addEventListener('mousedown', (e) => {
+        if (e.target === this.systemToggle) return; // Don't drag when clicking the toggle button
+
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+
+        if (e.target === this.systemWindowHeader || e.target.parentNode === this.systemWindowHeader) {
+          isDragging = true;
+          this.systemWindow.style.zIndex = '1002'; // Bring to front while dragging
+        }
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+          e.preventDefault();
+
+          currentX = e.clientX - initialX;
+          currentY = e.clientY - initialY;
+
+          xOffset = currentX;
+          yOffset = currentY;
+
+          // Constrain to viewport bounds
+          const rect = this.systemWindow.getBoundingClientRect();
+          const maxX = window.innerWidth - rect.width;
+          const maxY = window.innerHeight - rect.height;
+
+          xOffset = Math.max(0, Math.min(xOffset, maxX));
+          yOffset = Math.max(0, Math.min(yOffset, maxY));
+
+          this.systemWindow.style.left = xOffset + 'px';
+          this.systemWindow.style.top = yOffset + 'px';
+          this.systemWindow.style.right = 'auto'; // Clear right positioning when dragging
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          this.systemWindow.style.zIndex = '1001'; // Return to normal z-index
+        }
+      });
+
+      // Touch events for mobile
+      this.systemWindowHeader.addEventListener('touchstart', (e) => {
+        if (e.target === this.systemToggle) return;
+
+        const touch = e.touches[0];
+        initialX = touch.clientX - xOffset;
+        initialY = touch.clientY - yOffset;
+
+        if (e.target === this.systemWindowHeader || e.target.parentNode === this.systemWindowHeader) {
+          isDragging = true;
+          this.systemWindow.style.zIndex = '1002';
+        }
+      });
+
+      document.addEventListener('touchmove', (e) => {
+        if (isDragging) {
+          e.preventDefault();
+
+          const touch = e.touches[0];
+          currentX = touch.clientX - initialX;
+          currentY = touch.clientY - initialY;
+
+          xOffset = currentX;
+          yOffset = currentY;
+
+          // Constrain to viewport bounds
+          const rect = this.systemWindow.getBoundingClientRect();
+          const maxX = window.innerWidth - rect.width;
+          const maxY = window.innerHeight - rect.height;
+
+          xOffset = Math.max(0, Math.min(xOffset, maxX));
+          yOffset = Math.max(0, Math.min(yOffset, maxY));
+
+          this.systemWindow.style.left = xOffset + 'px';
+          this.systemWindow.style.top = yOffset + 'px';
+          this.systemWindow.style.right = 'auto'; // Clear right positioning when dragging
+        }
+      });
+
+      document.addEventListener('touchend', () => {
+        if (isDragging) {
+          isDragging = false;
+          this.systemWindow.style.zIndex = '1001';
+        }
+      });
+
+      // Initialize position from current CSS
+      const computedStyle = window.getComputedStyle(this.systemWindow);
+      const rightValue = parseInt(computedStyle.right);
+      if (!isNaN(rightValue)) {
+        xOffset = window.innerWidth - this.systemWindow.offsetWidth - rightValue;
+      } else {
+        xOffset = parseInt(computedStyle.left) || (window.innerWidth - this.systemWindow.offsetWidth - 20);
+      }
+      yOffset = parseInt(computedStyle.top) || 70;
+    }
+
+    initMissingMessagesWindowDrag() {
+      let isDragging = false;
+      let currentX;
+      let currentY;
+      let initialX;
+      let initialY;
+      let xOffset = 0;
+      let yOffset = 0;
+
+      this.missingMessagesHeader.addEventListener('mousedown', (e) => {
+        if (e.target === this.missingMessagesToggle) return; // Don't drag when clicking the toggle button
+
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+
+        if (e.target === this.missingMessagesHeader || e.target.parentNode === this.missingMessagesHeader) {
+          isDragging = true;
+          this.missingMessagesWindow.style.zIndex = '1002'; // Bring to front while dragging
+        }
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+          e.preventDefault();
+
+          currentX = e.clientX - initialX;
+          currentY = e.clientY - initialY;
+
+          xOffset = currentX;
+          yOffset = currentY;
+
+          // Constrain to viewport bounds
+          const rect = this.missingMessagesWindow.getBoundingClientRect();
+          const maxX = window.innerWidth - rect.width;
+          const maxY = window.innerHeight - rect.height;
+
+          xOffset = Math.max(0, Math.min(xOffset, maxX));
+          yOffset = Math.max(0, Math.min(yOffset, maxY));
+
+          this.missingMessagesWindow.style.left = xOffset + 'px';
+          this.missingMessagesWindow.style.top = yOffset + 'px';
+          this.missingMessagesWindow.style.right = 'auto'; // Clear right positioning when dragging
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          this.missingMessagesWindow.style.zIndex = '1001'; // Return to normal z-index
+        }
+      });
+
+      // Touch events for mobile
+      this.missingMessagesHeader.addEventListener('touchstart', (e) => {
+        if (e.target === this.missingMessagesToggle) return;
+
+        const touch = e.touches[0];
+        initialX = touch.clientX - xOffset;
+        initialY = touch.clientY - yOffset;
+
+        if (e.target === this.missingMessagesHeader || e.target.parentNode === this.missingMessagesHeader) {
+          isDragging = true;
+          this.missingMessagesWindow.style.zIndex = '1002';
+        }
+      });
+
+      document.addEventListener('touchmove', (e) => {
+        if (isDragging) {
+          e.preventDefault();
+
+          const touch = e.touches[0];
+          currentX = touch.clientX - initialX;
+          currentY = touch.clientY - initialY;
+
+          xOffset = currentX;
+          yOffset = currentY;
+
+          // Constrain to viewport bounds
+          const rect = this.missingMessagesWindow.getBoundingClientRect();
+          const maxX = window.innerWidth - rect.width;
+          const maxY = window.innerHeight - rect.height;
+
+          xOffset = Math.max(0, Math.min(xOffset, maxX));
+          yOffset = Math.max(0, Math.min(yOffset, maxY));
+
+          this.missingMessagesWindow.style.left = xOffset + 'px';
+          this.missingMessagesWindow.style.top = yOffset + 'px';
+          this.missingMessagesWindow.style.right = 'auto'; // Clear right positioning when dragging
+        }
+      });
+
+      document.addEventListener('touchend', () => {
+        if (isDragging) {
+          isDragging = false;
+          this.missingMessagesWindow.style.zIndex = '1001';
+        }
+      });
+
+      // Initialize position from current CSS
+      const computedStyle = window.getComputedStyle(this.missingMessagesWindow);
+      const rightValue = parseInt(computedStyle.right);
+      if (!isNaN(rightValue)) {
+        xOffset = window.innerWidth - this.missingMessagesWindow.offsetWidth - rightValue;
+      } else {
+        xOffset = parseInt(computedStyle.left) || (window.innerWidth - this.missingMessagesWindow.offsetWidth - 20);
+      }
+      yOffset = parseInt(computedStyle.top) || 330;
+    }
+
+    // Utility function to convert bytes to hex string
+    bytesToHex(bytes) {
+      if (!bytes || bytes.length === 0) return '';
+      return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    // Reply functionality methods
+    startReply(messageId, nick, text) {
+      this.replyingTo = {
+        messageId: messageId,
+        nick: nick,
+        text: text
+      };
+
+      this.replyNick.textContent = nick;
+      this.replyText.textContent = text.length > 50 ? text.substring(0, 50) + '...' : text;
+      this.replyIndicator.classList.add('active');
+      this.messageInput.focus();
+    }
+
+    cancelReply() {
+      this.replyingTo = null;
+      this.replyIndicator.classList.remove('active');
+    }
+
+    generateMessageId() {
+      return Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+    }
+
+    jumpToMessage(messageId) {
+      const messageElement = this.chatContainer.querySelector(`[data-message-id="${messageId}"]`);
+
+      if (messageElement) {
+        // Scroll to the message
+        messageElement.scrollIntoView({behavior: 'smooth', block: 'center'});
+
+        // Remove any existing highlight
+        const previousHighlight = this.chatContainer.querySelector('.message.highlight');
+        if (previousHighlight) {
+          previousHighlight.classList.remove('highlight');
+        }
+
+        // Add highlight animation
+        messageElement.classList.add('highlight');
+
+        // Remove highlight class after animation completes
+        setTimeout(() => {
+          messageElement.classList.remove('highlight');
+        }, 2000);
+
+        return true;
+      } else {
+        // Message not found in current view
+        console.log('Message not found:', messageId);
+        this.addSystemMessage(`Original message not found in current chat history`);
+        return false;
+      }
+    }
+
+    // Get a consistent color for a nickname
+    getNicknameColor(nickname) {
+      // Return cached color if exists
+      if (this.nicknameColors.has(nickname)) {
+        return this.nicknameColors.get(nickname);
+      }
+
+      // Define a palette of retro terminal colors
+      const colors = [
+        '#00ffff', // cyan
+        '#ff00ff', // magenta
+        '#ffff00', // yellow
+        '#00ff00', // green
+        '#ff8800', // orange
+        '#00aaff', // light blue
+        '#ff00aa', // pink
+        '#88ff00', // lime
+        '#ff5555', // light red
+        '#5555ff', // light blue
+        '#55ff55', // light green
+        '#ffaa00', // gold
+        '#aa00ff', // purple
+        '#00ffaa', // aqua
+        '#ff55ff', // light magenta
+      ];
+
+      // Generate a deterministic index based on nickname
+      let hash = 0;
+      for (let i = 0; i < nickname.length; i++) {
+        hash = ((hash << 5) - hash) + nickname.charCodeAt(i);
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      const colorIndex = Math.abs(hash) % colors.length;
+      const color = colors[colorIndex];
+
+      // Cache the color
+      this.nicknameColors.set(nickname, color);
+      return color;
+    }
+
+    // Insert message in chronological order
+    insertMessageInOrder(messageElement, timestamp) {
+      const messages = this.chatContainer.querySelectorAll('.message');
+
+      // Find the correct position to insert the message
+      let insertBefore = null;
+      for (const existingMessage of messages) {
+        const existingTimestamp = parseInt(existingMessage.dataset.timestamp);
+        if (existingTimestamp && existingTimestamp > timestamp) {
+          insertBefore = existingMessage;
+          break;
+        }
+      }
+
+      // Insert at the found position or at the end if no position found
+      if (insertBefore) {
+        this.chatContainer.insertBefore(messageElement, insertBefore);
+      } else {
+        this.chatContainer.appendChild(messageElement);
+      }
+    }
+
+    async initWaku() {
+      try {
+        this.updateStatus('Connecting...', 'connecting');
+
+        // Create Waku node with custom bootstrap peers
+        const customBootstrap = '/dns4/waku.fryorcraken.xyz/tcp/8000/wss/p2p/16Uiu2HAmMRvhDHrtiHft1FTUYnn6cVA8AWVrTyLUayJJ3MWpUZDB';
+        this.node = await createLightNode({
+          defaultBootstrap: true,
+          bootstrapPeers: [customBootstrap]
+        });
+
+        const encoder = this.node.createEncoder({contentTopic: this.contentTopic});
+        const decoder = this.node.createDecoder({contentTopic: this.contentTopic});
+        this.reliableChannel = await ReliableChannel.create(this.node, "retro-chat-channel", this.nickname, encoder, decoder)
+
+        // Set up event listeners for connection state changes
+        this.setupWakuEventListeners();
+
+        // Dial the specified peer
+        await this.dialCustomPeer();
+
+        this.updateStatus('Waiting for peers...', 'connecting');
+
+        // Subscribe to messages
+        this.reliableChannel.addEventListener("message-received", (event) => {
+          this.handleIncomingMessage(event.detail);
+        })
+
+        // Subscribe to sent events
+        this.reliableChannel.addEventListener("message-sent", (event) => {
+          this.addSystemMessage(`Message sent: ${event.detail.toString().substring(0, 12)}...`);
+        })
+
+        // Subscribe to sent events
+        this.reliableChannel.messageChannel.addEventListener("sds:out:sync-sent", (event) => {
+          this.addSystemMessage(`Sync Message sent with history: ${event.detail.causalHistory.map((ch) => ch.messageId.toString().substring(0, 12))}...`);
+        })
+
+        // Subscribe to InMessageMissing events
+        this.reliableChannel.messageChannel.addEventListener("sds:in:message-missing", (event) => {
+          this.handleMissingMessages(event.detail);
+        })
+
+        this.messageInput.disabled = false;
+        this.sendButton.disabled = false;
+
+        // Initial connection status check using current health
+        this.updateConnectionStatus();
+
+      } catch (error) {
+        console.error('Failed to initialize Waku:', error);
+        this.updateStatus('Connection failed', 'error');
+        this.addSystemMessage(`Connection failed: ${error.message}`);
+      }
+    }
+
+    setupWakuEventListeners() {
+      if (!this.node || !this.node.events) return;
+
+      // Listen for health status changes
+      this.node.events.addEventListener("waku:health", (event) => {
+        this.handleHealthChange(event.detail);
+      });
+    }
+
+    async dialCustomPeer() {
+      // Custom peer added to bootstrap peers during node creation
+      this.addSystemMessage(`Custom peer waku.fryorcraken.xyz added to bootstrap peers`);
+    }
+
+    handleHealthChange(healthStatus) {
+      this.updateConnectionStatus(healthStatus);
+
+      // Show connection message when first achieving healthy status
+      if (!this.hasShownConnectedMessage && healthStatus !== 'Unhealthy') {
+        this.hasShownConnectedMessage = true;
+        this.addSystemMessage('Connected to Waku network! You can now chat.');
+      }
+
+      // Log health status changes
+      this.addConnectionMessage(`Health status: ${healthStatus}`);
+    }
+
+    updateConnectionStatus(healthStatus) {
+      // Use provided health status or get current health status
+      const status = healthStatus || this.node?.health || 'Unhealthy';
+
+      if (status === HealthStatus.SufficientlyHealthy) {
+        this.updateStatus('Connected', 'connected');
+        this.messageInput.disabled = false;
+        this.sendButton.disabled = false;
+      } else if (status === HealthStatus.MinimallyHealthy) {
+        this.updateStatus('Connected-ish', 'connecting');
+        this.messageInput.disabled = false;
+        this.sendButton.disabled = false;
+      } else {
+        this.updateStatus('Disconnected', 'error');
+        this.messageInput.disabled = true;
+        this.sendButton.disabled = true;
+      }
+
+      // Update tooltip with health status
+      this.updateHealthTooltip(status);
+    }
+
+
+    updateHealthTooltip(healthStatus) {
+      const statusDescriptions = {
+        'Unhealthy': 'No peer connections',
+        'MinimallyHealthy': 'Basic connectivity established',
+        'SufficientlyHealthy': 'Good connectivity to network'
+      };
+
+      const description = statusDescriptions[healthStatus] || 'Unknown status';
+      this.statusTooltip.innerHTML = `<span class="tooltip-protocol">Status: ${healthStatus}</span><span class="tooltip-protocol">${description}</span>`;
+    }
+
+    updateStatus(text, className) {
+      // Preserve the tooltip while updating status text
+      const tooltip = this.status.querySelector('.tooltip');
+      this.status.textContent = text;
+      this.status.className = `status ${className}`;
+
+      // Re-append the tooltip if it existed
+      if (tooltip) {
+        this.status.appendChild(tooltip);
+      }
+    }
+
+
+    async sendMessage() {
+      const text = this.messageInput.value.trim();
+      if (!text || !this.node || !this.Chat2Message) return;
+
+      // Disable input temporarily
+      this.messageInput.disabled = true;
+      this.sendButton.disabled = true;
+
+      // Clear input immediately
+      const originalText = text;
+      this.messageInput.value = '';
+
+      // Create a temporary message ID for tracking
+      const chatMessageId = Date.now() + '-' + Math.random();
+
+      // Add the message to chat with sending status
+      const messageData = {
+        timestamp: Date.now(),
+        sender: this.nickname,
+        text: originalText,
+        messageId: chatMessageId,
+        status: 'sending'
+      };
+
+      // Add reply data if replying
+      if (this.replyingTo) {
+        messageData.replyToMessageId = this.replyingTo.messageId;
+        messageData.replyToNick = this.replyingTo.nick;
+        messageData.replyToText = this.replyingTo.text;
+      }
+
+      const messageElement = this.addChatMessageWithStatus(messageData);
+
+      try {
+        // Create protobuf message
+        const message = {
+          timestamp: Date.now(),
+          nick: this.nickname,
+          payload: new TextEncoder().encode(originalText)
+        };
+
+        // Add reply fields if replying
+        if (this.replyingTo) {
+          message.replyToMessageId = this.replyingTo.messageId;
+          message.replyToNick = this.replyingTo.nick;
+          message.replyToText = this.replyingTo.text;
+        }
+
+        // Encode with protobuf
+        const protoMessage = this.Chat2Message.create(message);
+        const payload = this.Chat2Message.encode(protoMessage).finish();
+        const messageId = this.reliableChannel.send(payload);
+
+        // Track this message as locally sent
+        this.localSentMessages.set(messageId, chatMessageId);
+
+        this.reliableChannel.addEventListener("sending-message-irrecoverable-error", (event) => {
+          if (messageId === event.detail.messageId) {
+            console.error('Failed to send message:', event.detail.error);
+            this.addSystemMessage(`Failed to send message: ${event.detail.error}`);
+          }
+        })
+
+        this.reliableChannel.addEventListener("message-sent", (event) => {
+          if (messageId === event.detail) {
+            this.updateMessageStatus(chatMessageId, 'sent');
+            // Clear reply after successful send
+            if (this.replyingTo) {
+              this.cancelReply();
+            }
+          }
+        })
+
+        this.reliableChannel.addEventListener("message-acknowledged", (event) => {
+          console.log("received ack", event.detail)
+          if (messageId === event.detail) {
+            this.updateMessageStatus(chatMessageId, 'acknowledged');
+          }
+        })
+
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        this.addSystemMessage(`Failed to send message: ${error.message}`);
+        // Remove the failed message
+        if (messageElement && messageElement.parentNode) {
+          messageElement.parentNode.removeChild(messageElement);
+        }
+        // Restore the message on error
+        this.messageInput.value = originalText;
+      } finally {
+        // Re-enable input
+        this.messageInput.disabled = false;
+        this.sendButton.disabled = false;
+        this.messageInput.focus();
+      }
+    }
+
+    handleIncomingMessage(wakuMessage) {
+      console.log("handling incoming message", wakuMessage)
+      try {
+        // Check if this message's hash matches any missing message retrieval hints
+        // The retrieval hint should be the message ID itself
+        const messageId = ReliableChannel.getMessageId(wakuMessage.payload)
+        const messageIdHex = this.bytesToHex(messageId);
+
+        // Mark this message as recovered if it was in the missing messages list
+        this.markMissingMessageAsReceived(messageIdHex);
+
+        // Also check if wakuMessage has a hash property for alternative matching
+        if (wakuMessage.hash) {
+          const hashHex = this.bytesToHex(wakuMessage.hash);
+          this.markMissingMessageAsReceived(hashHex);
+        }
+
+        // We already processed this message
+        if (this.seenMessages.has(messageId)) return;
+
+        this.seenMessages.add(messageId);
+        // Decode protobuf message
+        const decodedMessage = this.Chat2Message.decode(wakuMessage.payload);
+
+        const message = {
+          timestamp: Number(decodedMessage.timestamp),
+          sender: decodedMessage.nick,
+          text: new TextDecoder().decode(decodedMessage.payload),
+          messageId: this.generateMessageId() // Generate ID for this message
+        };
+
+        // Add reply fields if present
+        if (decodedMessage.replyToMessageId) {
+          message.replyToMessageId = decodedMessage.replyToMessageId;
+          message.replyToNick = decodedMessage.replyToNick;
+          message.replyToText = decodedMessage.replyToText;
+        }
+
+        console.log("decoded message", message);
+
+        // Check if this is our own message that we already displayed locally
+        if (message.sender === this.nickname) {
+          // If we already sent and displayed this message locally, skip it
+          if (this.localSentMessages.has(messageId)) {
+            console.log("Skipping own message already displayed locally:", messageId);
+            return;
+          }
+          // Otherwise, this is our own message from another session or device, display it
+        }
+
+        // Add the message to chat
+        this.addChatMessage(message);
+
+        // Create notification for the new message
+        const isReply = !!message.replyToMessageId;
+        this.createNotification(message.sender, message.text, isReply);
+
+      } catch (error) {
+        console.error('Failed to process incoming message:', error);
+      }
+    }
+
+    addChatMessage(message) {
+      const messageElement = document.createElement('div');
+      const isLocalMessage = message.sender === this.nickname;
+      messageElement.className = isLocalMessage ? 'message local-message' : 'message';
+      messageElement.dataset.messageId = message.messageId;
+      messageElement.dataset.timestamp = message.timestamp; // Store timestamp for sorting
+
+      const timestamp = this.formatTimestamp(message.timestamp);
+      const senderColor = this.getNicknameColor(message.sender);
+
+      let replyPreview = '';
+      if (message.replyToMessageId) {
+        replyPreview = `
+          <div class="reply-preview" data-reply-to="${message.replyToMessageId}">
+            <span class="reply-nick">@${this.escapeHtml(message.replyToNick)}</span>: 
+            <span class="reply-text">${this.escapeHtml(message.replyToText)}</span>
+          </div>
+        `;
+      }
+
+      messageElement.innerHTML = `
+        ${replyPreview}
+        <div class="message-content">
+          <span class="timestamp">[${timestamp}]</span>
+          <span class="sender" style="color: ${senderColor};">&lt;${message.sender}&gt;</span>
+          <span class="message-text"> ${this.escapeHtml(message.text)}</span>
+        </div>
+        <button class="reply-button">[Reply]</button>
+      `;
+
+      // Add click handler for reply preview
+      const replyPreviewElement = messageElement.querySelector('.reply-preview');
+      if (replyPreviewElement) {
+        replyPreviewElement.addEventListener('click', () => {
+          const replyToId = replyPreviewElement.dataset.replyTo;
+          const found = this.jumpToMessage(replyToId);
+          if (!found) {
+            // Add visual feedback that message wasn't found
+            replyPreviewElement.classList.add('not-found');
+            setTimeout(() => {
+              replyPreviewElement.classList.remove('not-found');
+            }, 1000);
+          }
+        });
+      }
+
+      // Add reply button click handler
+      const replyButton = messageElement.querySelector('.reply-button');
+      if (replyButton) {
+        replyButton.addEventListener('click', () => {
+          this.startReply(message.messageId, message.sender, message.text);
+        });
+      }
+
+      // Store message for future reply references
+      this.messagesByMessageId.set(message.messageId, message);
+
+      // Insert message in correct chronological position
+      this.insertMessageInOrder(messageElement, message.timestamp);
+      this.scrollToBottom();
+
+      return messageElement;
+    }
+
+    addChatMessageWithStatus(message) {
+      const messageElement = document.createElement('div');
+      messageElement.className = 'message local-message';
+      messageElement.dataset.messageId = message.messageId;
+      messageElement.dataset.timestamp = message.timestamp; // Store timestamp for sorting
+
+      const timestamp = this.formatTimestamp(message.timestamp);
+      const senderColor = this.getNicknameColor(message.sender);
+
+      const statusIcon = message.status === 'sending' ? '◐' : '✓';
+      const statusClass = message.status;
+
+      let replyPreview = '';
+      if (message.replyToMessageId) {
+        replyPreview = `
+          <div class="reply-preview" data-reply-to="${message.replyToMessageId}">
+            <span class="reply-nick">@${this.escapeHtml(message.replyToNick)}</span>: 
+            <span class="reply-text">${this.escapeHtml(message.replyToText)}</span>
+          </div>
+        `;
+      }
+
+      messageElement.innerHTML = `
+        ${replyPreview}
+        <div class="message-content">
+          <span class="timestamp">[${timestamp}]</span>
+          <span class="sender" style="color: ${senderColor};">&lt;${message.sender}&gt;</span>
+          <span class="message-text"> ${this.escapeHtml(message.text)}</span>
+          <span class="message-status ${statusClass}">${statusIcon}</span>
+        </div>
+        <button class="reply-button">[Reply]</button>
+      `;
+
+      // Add click handler for reply preview
+      const replyPreviewElement = messageElement.querySelector('.reply-preview');
+      if (replyPreviewElement) {
+        replyPreviewElement.addEventListener('click', () => {
+          const replyToId = replyPreviewElement.dataset.replyTo;
+          const found = this.jumpToMessage(replyToId);
+          if (!found) {
+            // Add visual feedback that message wasn't found
+            replyPreviewElement.classList.add('not-found');
+            setTimeout(() => {
+              replyPreviewElement.classList.remove('not-found');
+            }, 1000);
+          }
+        });
+      }
+
+      // Add reply button click handler
+      const replyButton = messageElement.querySelector('.reply-button');
+      if (replyButton) {
+        replyButton.addEventListener('click', () => {
+          this.startReply(message.messageId, message.sender, message.text);
+        });
+      }
+
+      // Store message for future reply references
+      this.messagesByMessageId.set(message.messageId, message);
+
+      // Insert message in correct chronological position
+      this.insertMessageInOrder(messageElement, message.timestamp);
+      this.scrollToBottom();
+
+      return messageElement;
+    }
+
+    updateMessageStatus(messageId, status) {
+      const messageElement = this.chatContainer.querySelector(`[data-message-id="${messageId}"]`);
+      if (messageElement) {
+        const statusElement = messageElement.querySelector('.message-status');
+        if (statusElement) {
+          statusElement.className = `message-status ${status}`;
+          if (status === 'sending') {
+            statusElement.textContent = '◐';
+          } else if (status === 'sent') {
+            statusElement.textContent = '✓';
+          } else if (status === 'acknowledged') {
+            statusElement.textContent = '✓✓';
+          }
+        }
+      }
+    }
+
+    addSystemMessage(text) {
+      this.addToSystemWindow(text, false);
+    }
+
+    addConnectionMessage(text) {
+      this.addToSystemWindow(text, true);
+    }
+
+    addToSystemWindow(text, isConnection = false) {
+      const messageElement = document.createElement('div');
+      messageElement.className = isConnection ? 'system-window-message connection' : 'system-window-message';
+      messageElement.textContent = text;
+
+      this.systemContent.appendChild(messageElement);
+
+      // Auto-scroll to bottom of system window
+      this.systemContent.scrollTop = this.systemContent.scrollHeight;
+
+      // Limit the number of messages in system window (keep last 50)
+      const messages = this.systemContent.querySelectorAll('.system-window-message');
+      if (messages.length > 50) {
+        messages[0].remove();
+      }
+    }
+
+    formatTimestamp(timestamp) {
+      const messageDate = new Date(timestamp);
+      const today = new Date();
+
+      // Check if the message is from today
+      const isToday = messageDate.toDateString() === today.toDateString();
+
+      if (isToday) {
+        // Show only time for today's messages
+        return messageDate.toLocaleTimeString([], {hour12: false});
+      } else {
+        // Show date and time for messages from other days
+        return messageDate.toLocaleString([], {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+      }
+    }
+
+    escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    scrollToBottom() {
+      this.chatContainer.scrollTop = this.chatContainer.scrollHeight;
+    }
+
+    markMissingMessageAsReceived(messageIdHex) {
+      // Check if we have this message ID in our seen missing messages set
+      if (this.seenMissingMessages.has(messageIdHex)) {
+        // Find the message element by iterating through the missing messages
+        const messageElements = this.missingMessagesContent.querySelectorAll('.missing-messages-window-message');
+        for (const messageElement of messageElements) {
+          if (messageElement.dataset.fullId === messageIdHex && !messageElement.classList.contains('received')) {
+            // Cross out the message
+            messageElement.classList.add('received');
+            this.recoveredMessagesCount++;
+
+            // Update window title with new counts
+            this.updateMissingMessagesTitle();
+
+            // Log for debugging
+            console.log(`Missing message received: ${messageIdHex.substring(0, 12)}...`);
+            this.addSystemMessage(`Missing message recovered: ${messageIdHex.substring(0, 12)}...`);
+            break;
+          }
+        }
+      }
+
+      // Also check by retrieval hint (backwards compatibility)
+      const messageElement = this.missingMessagesByHint.get(messageIdHex);
+      if (messageElement && !messageElement.classList.contains('received')) {
+        // Cross out the message
+        messageElement.classList.add('received');
+        this.recoveredMessagesCount++;
+
+        // Update window title with new counts
+        this.updateMissingMessagesTitle();
+
+        // Log for debugging
+        console.log(`Missing message received via hint: ${messageIdHex.substring(0, 12)}...`);
+        this.addSystemMessage(`Missing message recovered via hint: ${messageIdHex.substring(0, 12)}...`);
+      }
+    }
+
+    updateMissingMessagesTitle() {
+      const titleElement = this.missingMessagesWindow.querySelector('.missing-messages-window-title');
+      if (this.recoveredMessagesCount > 0) {
+        titleElement.textContent = `${this.missingMessagesCount} MISSING MESSAGES (${this.recoveredMessagesCount} RECOVERED)`;
+      } else {
+        titleElement.textContent = `${this.missingMessagesCount} MISSING MESSAGES`;
+      }
+    }
+
+    handleMissingMessages(missingMessages) {
+      if (!missingMessages || missingMessages.length === 0) return;
+
+      // Clear the "No missing messages" text if this is the first missing message
+      if (this.missingMessagesCount === 0) {
+        this.missingMessagesContent.innerHTML = '';
+      }
+
+      missingMessages.forEach(({messageId, retrievalHint}) => {
+        const messageIdHex = this.bytesToHex(messageId);
+
+        // Check if we've already seen this message ID to avoid duplicates
+        if (this.seenMissingMessages.has(messageIdHex)) {
+          return; // Skip duplicate
+        }
+
+        this.seenMissingMessages.add(messageIdHex);
+        this.missingMessagesCount++;
+
+        const messageElement = document.createElement('div');
+        messageElement.className = 'missing-messages-window-message';
+
+        const retrievalHintHex = retrievalHint ? this.bytesToHex(retrievalHint) : 'N/A';
+
+        // Display shortened versions: first 8 chars of ID and first 12 chars of hint
+        const displayId = messageIdHex.length > 8 ? `${messageIdHex.substring(0, 8)}...` : messageIdHex;
+        const displayHint = retrievalHintHex.length > 12 ? `${retrievalHintHex.substring(0, 12)}...` : retrievalHintHex;
+
+        messageElement.innerHTML = `
+          <span class="message-id">ID:${displayId}</span> | <span class="retrieval-hint">Hint:${displayHint}</span>
+        `;
+
+        // Store full values as data attributes for potential future use
+        messageElement.dataset.fullId = messageIdHex;
+        messageElement.dataset.fullHint = retrievalHintHex;
+
+        // Store in map for quick lookup by retrieval hint
+        if (retrievalHintHex !== 'N/A') {
+          this.missingMessagesByHint.set(retrievalHintHex, messageElement);
+        }
+
+        this.missingMessagesContent.appendChild(messageElement);
+
+        // Auto-scroll to bottom of missing messages window
+        this.missingMessagesContent.scrollTop = this.missingMessagesContent.scrollHeight;
+
+        // Limit the number of messages in missing messages window (keep last 30)
+        const messages = this.missingMessagesContent.querySelectorAll('.missing-messages-window-message');
+        if (messages.length > 30) {
+          const removedMessage = messages[0];
+          // Remove from seen set when removing from display
+          const removedId = removedMessage.dataset.fullId;
+          const removedHint = removedMessage.dataset.fullHint;
+          if (removedId) {
+            this.seenMissingMessages.delete(removedId);
+            this.missingMessagesCount--;
+            // If this was a recovered message, decrement the recovered count
+            if (removedMessage.classList.contains('received')) {
+              this.recoveredMessagesCount--;
+            }
+          }
+          if (removedHint && removedHint !== 'N/A') {
+            this.missingMessagesByHint.delete(removedHint);
+          }
+          removedMessage.remove();
+        }
+      });
+
+      // Update window title with count
+      this.updateMissingMessagesTitle();
+    }
+  }
+
+  // Initialize the chat application
+  window.addEventListener('DOMContentLoaded', () => {
+    new RetroIRC();
+    
+    // Register service worker for PWA functionality
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('Service Worker registered successfully:', registration);
+        })
+        .catch((error) => {
+          console.log('Service Worker registration failed:', error);
+        });
+    }
+  });
+</script>
+</body>
+</html>
